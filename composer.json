@@ -1,0 +1,46 @@
+{
+    "name": "arshad1114/laravel-dms-disk",
+    "description": "A custom Laravel filesystem disk driver for Document Management Services over HTTP.",
+    "type": "library",
+    "keywords": ["laravel", "filesystem", "dms", "storage", "microservice"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Arshad Noor",
+            "email": "arshadnoor572@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "illuminate/http": "^10.0|^11.0|^12.0",
+        "league/flysystem": "^3.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0",
+        "phpunit/phpunit": "^10.0|^11.0",
+        "mockery/mockery": "^1.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Arshad1114\\DmsDisk\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Arshad1114\\DmsDisk\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Arshad1114\\DmsDisk\\DmsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
