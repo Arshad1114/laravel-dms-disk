@@ -135,7 +135,7 @@ class DmsClient
     {
         try {
             $this->http()
-                ->delete('/dms-disk/file', ['path' => $path, 'disk' => $this->disk()])
+                ->delete('/dms-disk/file?' . http_build_query(['path' => $path, 'disk' => $this->disk()]))
                 ->throw();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             throw DmsConnectionException::unreachable($this->config['url'], $e->getMessage());
