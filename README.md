@@ -3,8 +3,30 @@
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/arshad1114/laravel-dms-disk.svg?style=flat-square)](https://packagist.org/packages/arshad1114/laravel-dms-disk)
 [![Total Downloads](https://img.shields.io/packagist/dt/arshad1114/laravel-dms-disk.svg?style=flat-square)](https://packagist.org/packages/arshad1114/laravel-dms-disk)
 [![License](https://img.shields.io/packagist/l/arshad1114/laravel-dms-disk.svg?style=flat-square)](https://packagist.org/packages/arshad1114/laravel-dms-disk)
+[![Try in Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/arshad1114/laravel-dms-disk-demo)
 
 A custom Laravel filesystem disk driver that lets any Laravel microservice store, retrieve and manage files on a remote Document Management Service (DMS) using the **native `Storage` facade** — no custom HTTP calls, no helper functions, no boilerplate.
+
+## Try it online — no install needed
+
+Click the button above to launch a live demo in your browser using GitHub Codespaces. Both services start automatically — no setup required.
+
+Once the Codespace loads:
+```bash
+bash .devcontainer/start.sh
+```
+
+Open a new terminal:
+```bash
+cd consumer-service && php artisan tinker
+```
+
+Then try:
+```php
+Storage::disk('dms')->put('test/hello.txt', 'Hello World!');
+Storage::disk('dms')->get('test/hello.txt');
+Storage::disk('dms')->delete('test/hello.txt');
+```
 
 ## The problem
 
