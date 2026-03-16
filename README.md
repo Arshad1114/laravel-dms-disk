@@ -1,139 +1,229 @@
 # Laravel DMS Disk
 
-A Laravel Filesystem driver for Document Management Systems (DMS) via a REST API. Integrates seamlessly with Laravel's `Storage` facade using Flysystem v3.
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/arshad1114/laravel-dms-disk.svg?style=flat-square)](https://packagist.org/packages/arshad1114/laravel-dms-disk)
+[![Total Downloads](https://img.shields.io/packagist/dt/arshad1114/laravel-dms-disk.svg?style=flat-square)](https://packagist.org/packages/arshad1114/laravel-dms-disk)
+[![License](https://img.shields.io/packagist/l/arshad1114/laravel-dms-disk.svg?style=flat-square)](https://packagist.org/packages/arshad1114/laravel-dms-disk)
+
+A custom Laravel filesystem disk driver that lets any Laravel microservice store, retrieve and manage files on a remote Document Management Service (DMS) using the **native `Storage` facade** — no custom HTTP calls, no helper functions, no boilerplate.
+
+## The problem
+
+In a microservice architecture, when a service needs to store files on a dedicated DMS service, developers typically write custom HTTP calls in every service:
+```php
+// ❌ what developers do today — repeated in every service
+$response = Http::attach('file', $contents, 'invoice.pdf')
+    ->post('https://dms.internal/upload', ['path' => 'invoices/001.pdf']);
+```
+
+## The solution
+
+Install this package and use the native `Storage` facade as you always have:
+```php
+// ✅ with laravel-dms-disk
+Storage::disk('dms')->put('invoices/001.pdf', $contents);
+Storage::disk('dms')->get('invoices/001.pdf');
+Storage::disk('dms')->delete('invoices/001.pdf');
+```
+
+The HTTP transport is completely invisible.
+
+## How it works
+```
+Consumer service                         DMS service
+────────────────                         ───────────────────────────
+Storage::disk('dms')->put(...)           Receives the HTTP request
+       │                                 Calls Storage::put(...)
+       │           HTTPS                 using its own
+       └──────────────────────────────►  filesystems.php config
+```
 
 ## Requirements
 
 - PHP 8.1+
-- Laravel 10 or 11
+- Laravel 10, 11, or 12
 
 ## Installation
-
 ```bash
-composer require arshadnoor/laravel-dms-disk
+composer require arshad1114/laravel-dms-disk
 ```
 
-The service provider is auto-discovered via Laravel's package discovery.
+The `DmsServiceProvider` is auto-discovered — no manual registration needed.
 
-Publish the config file:
-
+Publish the config:
 ```bash
 php artisan vendor:publish --tag=dms-disk-config
 ```
 
 ## Configuration
 
-Add the following to your `.env` file:
-
+Add to your `.env`:
 ```env
-DMS_BASE_URL=https://dms.example.com/api/v1
-DMS_API_TOKEN=your-secret-token
-DMS_TIMEOUT=30
+DMS_URL=https://your-dms-service.internal
+DMS_TOKEN=your-strong-secret-token
 ```
 
-Add a new disk to `config/filesystems.php`:
-
+Add the `dms` disk to `config/filesystems.php`:
 ```php
 'disks' => [
-    // ...
+    // ... your existing disks
 
     'dms' => [
-        'driver'    => 'dms',
-        'base_url'  => env('DMS_BASE_URL'),
-        'api_token' => env('DMS_API_TOKEN'),
-        'timeout'   => env('DMS_TIMEOUT', 30),
+        'driver' => 'dms',
+    ],
+],
+```
+
+### Full config reference
+
+All options in `config/dms-disk.php`:
+
+| Key | Env variable | Default | Description |
+|---|---|---|---|
+| `url` | `DMS_URL` | `''` | Base URL of your DMS service |
+| `token` | `DMS_TOKEN` | `''` | Bearer token for authentication |
+| `timeout` | `DMS_TIMEOUT` | `30` | HTTP timeout in seconds |
+| `retry` | `DMS_RETRY` | `3` | Retry attempts on connection failure |
+| `retry_delay` | `DMS_RETRY_DELAY` | `200` | Milliseconds between retries |
+
+### Multiple DMS disks
+
+You can point multiple disks to different DMS services:
+```php
+'disks' => [
+    'dms' => [
+        'driver' => 'dms',
+        'url'    => env('DMS_URL'),
+        'token'  => env('DMS_TOKEN'),
+    ],
+    'dms-archive' => [
+        'driver' => 'dms',
+        'url'    => env('DMS_ARCHIVE_URL'),
+        'token'  => env('DMS_ARCHIVE_TOKEN'),
     ],
 ],
 ```
 
 ## Usage
 
-Use the `Storage` facade as you would with any other Laravel disk:
-
+### Upload a file
 ```php
-use Illuminate\Support\Facades\Storage;
+// From a string
+Storage::disk('dms')->put('invoices/001.pdf', $pdfContents);
 
-// Write a file
-Storage::disk('dms')->put('documents/report.pdf', $contents);
+// From an uploaded file in a controller
+$request->file('document')->store('documents', 'dms');
 
-// Read a file
-$contents = Storage::disk('dms')->get('documents/report.pdf');
+// With a custom filename
+$request->file('document')->storeAs('documents', 'invoice-001.pdf', 'dms');
 
-// Check existence
-if (Storage::disk('dms')->exists('documents/report.pdf')) {
-    // ...
-}
-
-// Delete a file
-Storage::disk('dms')->delete('documents/report.pdf');
-
-// List files
-$files = Storage::disk('dms')->files('documents');
-
-// Copy / move
-Storage::disk('dms')->copy('documents/a.pdf', 'archive/a.pdf');
-Storage::disk('dms')->move('documents/draft.pdf', 'documents/final.pdf');
+// As public visibility
+Storage::disk('dms')->put('avatars/user-1.jpg', $imageContents, 'public');
 ```
 
-## Expected DMS API Contract
+### Download a file
+```php
+// Get file contents as string
+$contents = Storage::disk('dms')->get('invoices/001.pdf');
 
-The driver expects the following REST endpoints on the configured `base_url`:
+// Stream download directly to browser
+return Storage::disk('dms')->download('invoices/001.pdf');
 
-| Method   | Endpoint                    | Description                        |
-|----------|-----------------------------|------------------------------------|
-| `GET`    | `/files/{path}`             | Download file contents             |
-| `PUT`    | `/files/{path}`             | Upload / overwrite file            |
-| `DELETE` | `/files/{path}`             | Delete a file                      |
-| `HEAD`   | `/files/{path}`             | Check file existence               |
-| `GET`    | `/files/{path}/metadata`    | Get file metadata (size, mime, ts) |
-| `GET`    | `/files?path=&recursive=`   | List directory contents            |
-| `POST`   | `/files/copy`               | Copy a file (`{from, to}` body)    |
-| `POST`   | `/files/move`               | Move a file (`{from, to}` body)    |
+// Stream with custom filename
+return Storage::disk('dms')->download('invoices/001.pdf', 'my-invoice.pdf');
+```
 
-All requests are authenticated via a `Bearer` token (`Authorization: Bearer <api_token>`).
+### Check existence
+```php
+if (Storage::disk('dms')->exists('invoices/001.pdf')) {
+    // file exists
+}
 
-### Metadata response shape
-
-```json
-{
-    "size": 1024,
-    "mime_type": "application/pdf",
-    "last_modified": 1700000000
+if (Storage::disk('dms')->missing('invoices/001.pdf')) {
+    // file does not exist
 }
 ```
 
-### List contents response shape
-
-```json
-{
-    "files": [
-        {
-            "path": "documents/report.pdf",
-            "size": 1024,
-            "mime_type": "application/pdf",
-            "last_modified": 1700000000
-        }
-    ]
-}
+### Delete a file
+```php
+Storage::disk('dms')->delete('invoices/001.pdf');
 ```
 
-## Exceptions
+### Move and copy
+```php
+// Move (rename)
+Storage::disk('dms')->move('old/path.pdf', 'new/path.pdf');
 
-| Exception                  | When thrown                              |
-|----------------------------|------------------------------------------|
-| `DmsAuthException`         | API returns 401 or 403                   |
-| `DmsFileNotFoundException`  | API returns 404 on read/metadata         |
-| `DmsConnectionException`   | Network or connection failure            |
-| `DmsException`             | Any other DMS API error                  |
-
-All exceptions extend `DmsException`, which extends `RuntimeException`.
-
-## Testing
-
-```bash
-composer test
+// Copy
+Storage::disk('dms')->copy('original.pdf', 'copy.pdf');
 ```
+
+### List files
+```php
+// Files in a directory
+$files = Storage::disk('dms')->files('invoices');
+
+// Files recursively
+$files = Storage::disk('dms')->allFiles('invoices');
+```
+
+### File metadata
+```php
+$size      = Storage::disk('dms')->size('invoices/001.pdf');
+$mime      = Storage::disk('dms')->mimeType('invoices/001.pdf');
+$timestamp = Storage::disk('dms')->lastModified('invoices/001.pdf');
+```
+
+### URLs
+```php
+// Public URL
+$url = Storage::disk('dms')->url('avatars/user-1.jpg');
+
+// Temporary signed URL
+$url = Storage::disk('dms')->temporaryUrl('invoices/001.pdf', now()->addHour());
+```
+
+### Visibility
+```php
+Storage::disk('dms')->setVisibility('avatars/user-1.jpg', 'public');
+Storage::disk('dms')->setVisibility('invoices/001.pdf', 'private');
+
+$visibility = Storage::disk('dms')->visibility('avatars/user-1.jpg');
+// returns 'public' or 'private'
+```
+
+## Troubleshooting
+
+### 401 Unauthorized
+`DMS_TOKEN` in the consumer does not match `DMS_SERVER_TOKEN` in the DMS service. Make sure both values are identical.
+
+### Driver [dms] not supported
+The `dms` disk is missing from `config/filesystems.php`. Add it as shown in the configuration section above.
+
+### Connection refused / timeout
+`DMS_URL` is wrong or the DMS service is not running. Double check the URL and port.
+
+### Routes not found on DMS side
+Run `php artisan route:clear` on the DMS service and check `php artisan route:list --path=dms-disk`.
+
+## DMS server packages
+
+Your DMS service can be written in any language that implements the API contract. Official server packages:
+
+| Framework | Package |
+|---|---|
+| Laravel | [arshad1114/laravel-dms-disk-server](https://github.com/arshad1114/laravel-dms-disk-server) |
+| Node.js | Coming soon |
+
+## Contributing
+
+Contributions are welcome. Please:
+
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feat/your-feature`
+3. Write tests for your change
+4. Make sure all tests pass: `./vendor/bin/phpunit`
+5. Open a pull request
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) file.
