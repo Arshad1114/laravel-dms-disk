@@ -27,20 +27,33 @@ class DmsClient
                 (int) $this->config['retry'],
                 (int) $this->config['retry_delay'],
                 function (\Exception $e) {
-                    // Only retry on connection errors, not on 4xx
                     return $e instanceof \Illuminate\Http\Client\ConnectionException;
                 }
             )
             ->acceptJson();
     }
 
-    private function disk(): string
+    private function disk(): ?string
     {
-        return $this->config['disk'] ?? 'local';
+        $disk = $this->config['disk'] ?? null;
+        return empty($disk) ? null : $disk;
+    }
+
+    private function withDisk(array $params): array
+    {
+        if ($this->disk()) {
+            $params['disk'] = $this->disk();
+        }
+        return $params;
+    }
+
+    private function withDiskQuery(array $params): string
+    {
+        return http_build_query($this->withDisk($params));
     }
 
     // -------------------------------------------------------------------------
-    // Exception mapper — converts HTTP status codes to typed exceptions
+    // Exception mapper
     // -------------------------------------------------------------------------
 
     private function handleRequestException(RequestException $e, string $path = ''): never
@@ -48,9 +61,9 @@ class DmsClient
         $status = $e->response->status();
 
         throw match (true) {
-            $status === 401             => DmsAuthException::invalidToken(),
-            $status === 404             => DmsFileNotFoundException::atPath($path),
-            default                     => new DmsException(
+            $status === 401 => DmsAuthException::invalidToken(),
+            $status === 404 => DmsFileNotFoundException::atPath($path),
+            default         => new DmsException(
                 "DMS request failed with status {$status}: " . $e->response->body()
             ),
         };
@@ -65,11 +78,10 @@ class DmsClient
         try {
             return $this->http()
                 ->attach('file', $contents, basename($path))
-                ->post('/dms-disk/upload', [
+                ->post('/dms-disk/upload', $this->withDisk([
                     'path'       => $path,
-                    'disk'       => $this->disk(),
                     'visibility' => $visibility,
-                ])
+                ]))
                 ->throw()
                 ->json();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -86,11 +98,10 @@ class DmsClient
 
             return $this->http()
                 ->attach('file', $contents, basename($path))
-                ->post('/dms-disk/upload', [
+                ->post('/dms-disk/upload', $this->withDisk([
                     'path'       => $path,
-                    'disk'       => $this->disk(),
                     'visibility' => $visibility,
-                ])
+                ]))
                 ->throw()
                 ->json();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -108,7 +119,7 @@ class DmsClient
     {
         try {
             return $this->http()
-                ->get('/dms-disk/file', ['path' => $path, 'disk' => $this->disk()])
+                ->get('/dms-disk/file', $this->withDisk(['path' => $path]))
                 ->throw()
                 ->body();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -135,7 +146,7 @@ class DmsClient
     {
         try {
             $this->http()
-                ->delete('/dms-disk/file?' . http_build_query(['path' => $path, 'disk' => $this->disk()]))
+                ->delete('/dms-disk/file?' . $this->withDiskQuery(['path' => $path]))
                 ->throw();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             throw DmsConnectionException::unreachable($this->config['url'], $e->getMessage());
@@ -152,7 +163,7 @@ class DmsClient
     {
         try {
             return (bool) $this->http()
-                ->get('/dms-disk/exists', ['path' => $path, 'disk' => $this->disk()])
+                ->get('/dms-disk/exists', $this->withDisk(['path' => $path]))
                 ->throw()
                 ->json('exists');
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -170,7 +181,7 @@ class DmsClient
     {
         try {
             return (string) $this->http()
-                ->get('/dms-disk/url', ['path' => $path, 'disk' => $this->disk()])
+                ->get('/dms-disk/url', $this->withDisk(['path' => $path]))
                 ->throw()
                 ->json('url');
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -184,11 +195,10 @@ class DmsClient
     {
         try {
             return $this->http()
-                ->get('/dms-disk/temp-url', [
+                ->get('/dms-disk/temp-url', $this->withDisk([
                     'path'   => $path,
-                    'disk'   => $this->disk(),
                     'expiry' => $expirySeconds,
-                ])
+                ]))
                 ->throw()
                 ->json();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -206,11 +216,10 @@ class DmsClient
     {
         try {
             $this->http()
-                ->post('/dms-disk/move', [
+                ->post('/dms-disk/move', $this->withDisk([
                     'from' => $from,
                     'to'   => $to,
-                    'disk' => $this->disk(),
-                ])
+                ]))
                 ->throw();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             throw DmsConnectionException::unreachable($this->config['url'], $e->getMessage());
@@ -227,11 +236,10 @@ class DmsClient
     {
         try {
             return $this->http()
-                ->get('/dms-disk/list', [
+                ->get('/dms-disk/list', $this->withDisk([
                     'directory' => $directory,
                     'recursive' => $recursive ? 'true' : 'false',
-                    'disk'      => $this->disk(),
-                ])
+                ]))
                 ->throw()
                 ->json('files', []);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -249,7 +257,7 @@ class DmsClient
     {
         try {
             return $this->http()
-                ->get('/dms-disk/metadata', ['path' => $path, 'disk' => $this->disk()])
+                ->get('/dms-disk/metadata', $this->withDisk(['path' => $path]))
                 ->throw()
                 ->json();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -267,11 +275,10 @@ class DmsClient
     {
         try {
             $this->http()
-                ->post('/dms-disk/visibility', [
+                ->post('/dms-disk/visibility', $this->withDisk([
                     'path'       => $path,
                     'visibility' => $visibility,
-                    'disk'       => $this->disk(),
-                ])
+                ]))
                 ->throw();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             throw DmsConnectionException::unreachable($this->config['url'], $e->getMessage());

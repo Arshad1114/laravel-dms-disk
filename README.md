@@ -95,6 +95,25 @@ Add the `dms` disk to `config/filesystems.php`:
 ],
 ```
 
+### Disk selection
+
+By default the DMS server uses its own configured default disk (`FILESYSTEM_DISK` in the DMS `.env`). You only need to set `DMS_DISK` if you want to target a specific disk on the DMS server:
+```env
+# Use DMS server default disk — recommended
+DMS_DISK=
+
+# Or target a specific disk on the DMS server
+DMS_DISK=client
+```
+
+You can also set it per disk in `config/filesystems.php`:
+```php
+'dms' => [
+    'driver' => 'dms',
+    'disk'   => 'client',  // store on the client disk on the DMS server
+],
+```
+
 ### Full config reference
 
 All options in `config/dms-disk.php`:
@@ -103,20 +122,32 @@ All options in `config/dms-disk.php`:
 |---|---|---|---|
 | `url` | `DMS_URL` | `''` | Base URL of your DMS service |
 | `token` | `DMS_TOKEN` | `''` | Bearer token for authentication |
+| `disk` | `DMS_DISK` | `null` | Disk name on the DMS server. If not set, DMS server uses its own default disk |
 | `timeout` | `DMS_TIMEOUT` | `30` | HTTP timeout in seconds |
 | `retry` | `DMS_RETRY` | `3` | Retry attempts on connection failure |
 | `retry_delay` | `DMS_RETRY_DELAY` | `200` | Milliseconds between retries |
 
 ### Multiple DMS disks
 
-You can point multiple disks to different DMS services:
+You can point multiple disks to different DMS services or different disks on the same DMS service:
 ```php
 'disks' => [
+    // Uses DMS server default disk
     'dms' => [
         'driver' => 'dms',
         'url'    => env('DMS_URL'),
         'token'  => env('DMS_TOKEN'),
     ],
+
+    // Targets the client disk on the DMS server
+    'dms-client' => [
+        'driver' => 'dms',
+        'url'    => env('DMS_URL'),
+        'token'  => env('DMS_TOKEN'),
+        'disk'   => 'client',
+    ],
+
+    // Points to a completely different DMS service
     'dms-archive' => [
         'driver' => 'dms',
         'url'    => env('DMS_ARCHIVE_URL'),
@@ -226,6 +257,31 @@ The `dms` disk is missing from `config/filesystems.php`. Add it as shown in the 
 
 ### Routes not found on DMS side
 Run `php artisan route:clear` on the DMS service and check `php artisan route:list --path=dms-disk`.
+
+### File storing on wrong disk
+If files are storing on the wrong disk on the DMS server, check `DMS_DISK` in your consumer `.env`. If it is set to `local` explicitly, clear it so the DMS server uses its own default:
+```env
+DMS_DISK=
+```
+
+### ServiceProvider not found
+If you get `Driver [dms] not supported`, run:
+```bash
+php artisan package:discover
+php artisan config:clear
+```
+
+If still not working, register the provider manually in `bootstrap/providers.php` (Laravel 11+):
+```php
+Arshad1114\DmsDisk\Consumer\DmsServiceProvider::class,
+```
+
+Or in `config/app.php` (Laravel 10):
+```php
+'providers' => [
+    Arshad1114\DmsDisk\Consumer\DmsServiceProvider::class,
+],
+```
 
 ## DMS server packages
 

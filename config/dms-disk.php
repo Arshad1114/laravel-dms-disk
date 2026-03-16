@@ -18,7 +18,7 @@ return [
      | The disk name on the DMS server to store files on.
      | The DMS server must have this disk configured and allowed.
      */
-    'disk' => env('DMS_DISK', 'local'),
+    'disk' => env('DMS_DISK', null),
 
     /*
      | HTTP request timeout in seconds.
